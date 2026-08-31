@@ -1,0 +1,31 @@
+[package]
+name = "dogma-cli"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Decision records linked to the changes they justify, enforced in CI."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ixxie/dogma"
+keywords = ["decision-records", "adr", "specification", "git"]
+categories = ["command-line-utilities", "development-tools"]
+
+# The plain `dogma` name on crates.io belongs to an unrelated traits library,
+# so the package carries a suffix the binary does not.
+[[bin]]
+name = "dogma"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
