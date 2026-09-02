@@ -1,20 +1,26 @@
 mod config;
 mod decision;
+mod template;
 
-use anyhow::Result;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 
-/// `--help` is the documentation: this tool generates no files into your
-/// repository and installs no instruction files, so the only place its
-/// behaviour is described is here.
+use config::Config;
+
+/// `--help` is the documentation. This tool writes nothing into a consuming
+/// repository — no generated instruction files, no per-editor adapters — so
+/// there is nowhere else for its behaviour to be described.
 #[derive(Parser)]
 #[command(
     name = "dogma",
     version,
     about = "Decision records linked to the changes they justify.",
-    long_about = "Records decisions, and enforces that changes to guarded paths cite an \
-accepted one. Everything it reports is derived from git and the working tree at the \
-moment you ask — it stores no state of its own."
+    long_about = "Enforces one rule: a commit that changes a guarded path must cite an \
+accepted decision. Everything it reports is derived from git and the working tree at \
+the moment you ask — it stores no state of its own."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -23,55 +29,105 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Work with decision records
-    #[command(subcommand)]
-    Decision(DecisionCommand),
+    /// Create a decision, dated today, with status: proposed
+    New {
+        /// Short title, e.g. "session lifetime"
+        title: String,
+    },
 
-    /// Verify that commits touching guarded paths cite an accepted decision
+    /// List decisions, oldest first
+    List,
+
+    /// The gate: guarded changes cite an accepted decision
+    ///
+    /// Also verifies that decisions are well-formed and that every guarded
+    /// glob matches something. Exits 1 on a violation, 2 on a usage error.
     Check {
         /// Commit range, e.g. main..HEAD. Defaults to the CI merge base when
         /// one is available, otherwise origin/HEAD..HEAD.
         range: Option<String>,
     },
 
-    /// Show the decision behind a line
+    /// Where the record and reality have come apart
+    ///
+    /// Accepted decisions nothing implements, and guarded files with no
+    /// decision behind them. Always exits 0 — this is a report, never a gate.
+    Gaps,
+
+    /// What decided this
+    ///
+    /// With a line, blames that line. Without one, lists every decision that
+    /// shaped the file.
     Why {
-        /// File and line, e.g. dogma/specs/auth.md:42
+        /// File, optionally with a line: dogma/specs/auth.md:42
         location: String,
     },
 
-    /// Show everything a decision caused
+    /// What this decided — every commit and file it caused
     Impact {
         /// Decision id, e.g. 26-08-24-session-lifetime
         id: String,
     },
-
-    /// List accepted decisions that nothing implements
-    Unbuilt,
 }
 
-#[derive(Subcommand)]
-enum DecisionCommand {
-    /// Create a decision, dated today, with status: proposed
-    New {
-        /// Short title, e.g. "session lifetime"
-        title: String,
-    },
-    /// List decisions and their statuses
-    List,
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("error: {error:#}");
+        std::process::exit(2);
+    }
 }
 
-fn main() -> Result<()> {
+fn run() -> Result<()> {
     let cli = Cli::parse();
+    let root = repo_root()?;
+    let config = Config::load(&root)?;
 
     match cli.command {
-        Command::Decision(DecisionCommand::New { title }) => {
-            todo!("scaffold a decision titled {title:?}")
-        }
-        Command::Decision(DecisionCommand::List) => todo!("list decisions"),
+        Command::New { title } => new_decision(&root, &config, &title),
+        Command::List => todo!("list decisions"),
         Command::Check { range } => todo!("check range {range:?}"),
+        Command::Gaps => todo!("report gaps"),
         Command::Why { location } => todo!("explain {location}"),
         Command::Impact { id } => todo!("impact of {id}"),
-        Command::Unbuilt => todo!("accepted but unimplemented"),
     }
+}
+
+/// The repository root, so every path the tool prints or reads is anchored to
+/// the same place regardless of which subdirectory it was invoked from.
+fn repo_root() -> Result<PathBuf> {
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .context("running git — is it on PATH?")?;
+
+    if !output.status.success() {
+        bail!("not inside a git repository");
+    }
+    let path = String::from_utf8(output.stdout).context("git printed non-UTF-8 output")?;
+    Ok(PathBuf::from(path.trim()))
+}
+
+fn new_decision(root: &Path, config: &Config, title: &str) -> Result<()> {
+    let slug = decision::slugify(title)?;
+    let today = chrono::Local::now().date_naive();
+    let id = format!("{}-{slug}", today.format("%y-%m-%d"));
+
+    let decisions_dir = config.decisions_dir(root);
+    let path = decision::path_for(&decisions_dir, &id)?;
+    if path.exists() {
+        bail!("{id} already exists at {}", path.display());
+    }
+
+    fs::create_dir_all(path.parent().expect("decision paths always have a parent"))
+        .with_context(|| format!("creating {}", path.display()))?;
+    fs::write(&path, template::scaffold(title))
+        .with_context(|| format!("writing {}", path.display()))?;
+
+    let shown = path.strip_prefix(root).unwrap_or(&path);
+    println!("{}", shown.display());
+    println!();
+    println!("Cite it from the commit that acts on it:");
+    println!("    {}: {id}", config.trailer);
+
+    Ok(())
 }

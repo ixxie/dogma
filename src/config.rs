@@ -4,11 +4,16 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-/// Where a project keeps its decisions and the paths whose changes need one.
+/// Where a project keeps its decisions, and which paths may not change
+/// without citing one.
 ///
-/// This is declarative input, not derived state — it says nothing that could
-/// fall out of date with the repository, only what the team chose. Every
-/// field has a default, so a project with no config file still works.
+/// This is declarative input, not derived state — it records what the team
+/// chose, never anything that could fall out of step with the repository.
+/// Every field has a default, so a project with no config file works.
+///
+/// Note what is *not* configurable: the decision statuses, and which of them
+/// satisfies the gate. If those varied per repo, `dogma check` would mean
+/// something different in each one.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub struct Config {
@@ -18,24 +23,22 @@ pub struct Config {
     pub guarded: Vec<String>,
     /// Commit trailer key used to cite a decision.
     pub trailer: String,
-    /// Decision statuses that satisfy the gate.
-    pub accepted_states: Vec<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            decisions: PathBuf::from("dogma/decisions"),
-            guarded: vec!["dogma/specs/**".to_string()],
+            decisions: PathBuf::from(".dogma/decisions"),
+            guarded: vec!["specs/**".to_string()],
             trailer: "Decision".to_string(),
-            accepted_states: vec!["accepted".to_string()],
         }
     }
 }
 
-/// Config file locations, in the order they are tried. The first that exists
-/// wins; finding none is not an error, because the defaults are usable.
-const CANDIDATES: [&str; 3] = ["dogma.toml", "dogma/config.toml", ".dogma/config.toml"];
+/// Config locations, in the order tried. Finding none is not an error,
+/// because the defaults are usable. `.dogma/` keeps the tool's own files
+/// together; `dogma.toml` at the root suits teams who prefer config there.
+const CANDIDATES: [&str; 2] = [".dogma/config.toml", "dogma.toml"];
 
 impl Config {
     pub fn load(root: &Path) -> Result<Self> {
@@ -44,13 +47,15 @@ impl Config {
             if !path.is_file() {
                 continue;
             }
-            let raw = fs::read_to_string(&path)
-                .with_context(|| format!("reading {}", path.display()))?;
-            let config: Config = toml::from_str(&raw)
-                .with_context(|| format!("parsing {}", path.display()))?;
-            return Ok(config);
+            let raw =
+                fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+            return toml::from_str(&raw).with_context(|| format!("parsing {}", path.display()));
         }
         Ok(Config::default())
+    }
+
+    pub fn decisions_dir(&self, root: &Path) -> PathBuf {
+        root.join(&self.decisions)
     }
 }
 
@@ -63,7 +68,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let config = Config::load(dir.path()).unwrap();
         assert_eq!(config.trailer, "Decision");
-        assert_eq!(config.decisions, PathBuf::from("dogma/decisions"));
+        assert_eq!(config.decisions, PathBuf::from(".dogma/decisions"));
     }
 
     #[test]
@@ -73,13 +78,15 @@ mod tests {
 
         let config = Config::load(dir.path()).unwrap();
         assert_eq!(config.trailer, "Because");
-        assert_eq!(config.accepted_states, vec!["accepted".to_string()]);
+        assert_eq!(config.guarded, vec!["specs/**".to_string()]);
     }
 
     #[test]
     fn an_unknown_key_is_an_error_rather_than_silently_ignored() {
+        // A typo in `guarded` would otherwise disable the gate while leaving
+        // it green, which is the worst failure a gate can have.
         let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("dogma.toml"), "decisionz = \"typo\"\n").unwrap();
+        fs::write(dir.path().join("dogma.toml"), "guardd = [\"specs/**\"]\n").unwrap();
 
         assert!(Config::load(dir.path()).is_err());
     }
