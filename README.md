@@ -3,28 +3,48 @@
 An architectural decision record system which prevents spec drift _without_
 opinions on how to author specs.
 
+How it works:
+- *Decisions* record proposed, accepted and rejected changes
+- *Commits* link changes to decisions, via a commit trailer
+- *Enforcement* is scoped to folders you configure
+
+This means you decide:
+- *How* to specify: specs, tests, behaviors, docs, etc
+- *When* to check for drift and how it fits in your workflow
+- *What* to specify in your codebase
+
 Written specifications drift from reality, and the discipline that would stop
 them can't be gated in CI without turning every open pull request red.
 
 *Arriving from [OpenSpec](https://github.com/Fission-AI/OpenSpec)? See
 [why dogma diverged](#coming-from-openspec).*
 
+<p align="center">
   <img src="docs/doge.png" width="620"
        alt="Doge in sunglasses, captioned: such decision, much enforce, very traceable, wow, no cite, no merge.">
+</p>
 
 ---
 
-## 🚶 Workflow
+## 🧩 Where it sits
 
+| question | answered by |
+|---|---|
+| *What* should the system do? | your specs, features, schemas, docs — any form |
+| *Does* the code do it? | your tests |
+| **Why is it like this, and who agreed?** | **dogma** |
+
+Dogma answers the third question only. It never parses your specifications, runs
+your tests or renders your docs, so it composes with whatever you already use:
+
+```toml
+enforce = ["features/**"]     # Cucumber, Behave, SpecFlow
+enforce = ["openapi.yaml"]    # a schema as the contract
+enforce = ["docs/**"]         # Sphinx, mkdocs, Docusaurus
+enforce = ["specs/**"]        # plain markdown
 ```
-my-service/
-├── .dogma/
-│   └── decisions/26/09/02-session-lifetime.md
-├── specs/
-│   └── auth.md                                  ← enforced by default
-└── src/
-    └── session.rs
-```
+
+## 🚶 Workflow
 
 **1. Record the decision.** Sessions expire too aggressively, so before touching
 anything:
@@ -35,6 +55,16 @@ $ dogma new "session lifetime"
 
 Cite it from the commit that acts on it:
     Decision: 26-09-02-session-lifetime
+```
+The only thing dogma touches in your repo is a `.dogma` folder with decisions:
+```
+my-service/
+├── .dogma/
+│   └── decisions/26/09/02-session-lifetime.md
+├── specs/
+│   └── auth.md                                  ← enforced by default
+└── src/
+    └── session.rs
 ```
 
 **2. Fill it in.** The scaffold's sections are the argument, not paperwork —
@@ -54,10 +84,8 @@ Idle sessions expire after 8 hours rather than 30 minutes.
 
 ## Alternatives
 Sliding expiry — never expires an abandoned session on a shared machine.
-Remember-me — moves the decision to users who cannot assess it.
 
-## Consequences
-A stolen token is useful for longer. Revisit if we add device management.
+etc...
 ```
 
 **3. Do the work, and cite it.** Spec and code together:
@@ -98,23 +126,29 @@ a1b2c3d  Expire idle sessions after 8 hours
 
 Nobody maintained that link. It is the commit.
 
-### What this does not tell you
+### Division of labour
 
-Dogma never verifies that a spec is **implemented** — only that changes to it
-carry a recorded reason. Step 3 puts spec and code in one commit by convention,
-and nothing enforces that convention.
+Dogma answers *why*, never *whether*. It does not verify that a spec is
+implemented — step 3 puts spec and code in one commit by convention, and nothing
+enforces that convention.
 
-Two thirds of an answer are available:
+That check belongs to your test suite, and the bridge is naming: a Gherkin
+scenario, or a heading in a markdown spec, matched by a test that shares its
+name. A green suite is the only mechanical evidence that words and code agree.
+Every tool in this space stops here — BDD frameworks execute the scenarios you
+wrote but cannot tell you a scenario is missing; spec tools check that documents
+are well-formed, not true.
 
-- `dogma gaps` lists accepted decisions no commit implements — the *we agreed
-  and never built it* case, which is usually the one that bites.
-- Whether the code does what the words say is the correspondence problem, and
-  no tool in this space solves it. Point scenario names at test names; a green
-  suite is the only mechanical evidence that exists.
+What dogma adds either side of that:
 
-Closing that last gap is the team's to design — a definition of done, a
-review checklist, a scenario-to-test naming convention. Dogma deliberately does
-not guess at which, because the answer depends on how you already work.
+- `dogma gaps` catches the coarser failure — accepted decisions that no commit
+  implements, the *we agreed and never built it* case.
+- `dogma why` answers the question tests never do. A passing test proves the
+  code matches the claim; it says nothing about who wanted the claim, or why.
+
+Closing the remaining gap is the team's to design — a definition of done, a
+scenario-to-test naming convention, a review checklist. Dogma does not guess at
+which, because the answer depends on how you already work.
 
 <a id="design"></a>
 
