@@ -1,8 +1,7 @@
 # 🐕 dogma
 
-Decision records linked to the changes they justify, enforced in CI.
-
-> δόγμα — *that which seems good*; the formal word for an assembly's decision.
+An architectural decision record system which prevents spec drift _without_
+opinions on how to author specs.
 
 Written specifications drift from reality, and the discipline that would stop
 them can't be gated in CI without turning every open pull request red.
@@ -10,10 +9,8 @@ them can't be gated in CI without turning every open pull request red.
 *Arriving from [OpenSpec](https://github.com/Fission-AI/OpenSpec)? See
 [why dogma diverged](#coming-from-openspec).*
 
-<p align="center">
   <img src="docs/doge.png" width="620"
        alt="Doge in sunglasses, captioned: such decision, much enforce, very traceable, wow, no cite, no merge.">
-</p>
 
 ---
 
@@ -44,43 +41,55 @@ decision ──cited by──> commits ──contain──> spec changes
 | what did we agree and never build? | `dogma gaps` |
 | is this branch compliant? | `dogma check main..HEAD` |
 
-### Tracing code, optionally
+### Citing without enforcing
 
-Nothing in the mechanism is spec-specific — `enforce` is a list of globs, and
-the tool has no idea what a spec is. That makes the interesting setting a
-choice rather than a feature:
+`enforce` decides where a *missing* citation is an error. It does not decide
+where citations work — those work everywhere, always.
 
-```toml
-enforce = ["specs/**"]                      # spec-level traceability
-enforce = ["**", "!vendor/**"]              # every line in the repository
+Any commit may carry a trailer, whether or not it touches an enforced path:
+
+```
+Fix session expiry off-by-one
+
+Decision: 26-09-02-session-lifetime
 ```
 
-Enforce only your specs and you get the modest version: consequential documents
-can't change without a reason. Enforce code as well and something better falls
-out — **every line in the repository traces to a decision**:
+Nothing required that citation. But `why` and `impact` never consult `enforce`
+at all, so it is traced like any other:
 
 ```console
 $ dogma why src/session.rs:88
 26-09-02-session-lifetime  (accepted)  Expire idle sessions after 8 hours
 ```
 
-At that setting decisions stop being per-change paperwork and become durable
-architectural anchors: one decision, cited by years of commits, answering "why
-is this like this" for everything downstream of it. Because the link is a commit
-trailer rather than an annotation in the code, it survives refactors — git
-already tracks lines across moves and renames.
+So the useful pattern is to enforce the few paths where a silent change would
+actually hurt, and let people cite freely everywhere else. Traceability into
+code becomes opt-in rather than imposed: no gate demands it, and every developer
+who bothers makes the record better. `dogma impact` then shows the code that
+implemented a decision alongside the specs that describe it.
 
-It is also, incidentally, what traceability standards demand. DO-178C in
-aerospace and IEC 62304 in medical devices both require every change to be
-traceable to an approved change request; teams satisfy that today with six-figure
-ALM suites whose core function is this one edge.
+Because the link is a commit trailer rather than an annotation in the source, it
+survives refactors — git already tracks lines across moves and renames, which is
+what makes this durable where `// see spec: auth.md` comments are not.
 
-**The honest cost at that setting** is chore pressure. Dependency bumps,
-formatting passes and generated files have no decision behind them, so you end
-up either growing the exemption list or minting a routine-maintenance decision
-that everything cites — a rubber stamp wearing a lanyard. Enforcing the
-genuinely consequential surfaces (specs, schemas, public APIs, migrations,
-infrastructure) is where "changed silently" actually costs you something.
+<details>
+<summary>Enforcing everything, if you want the strict version</summary>
+
+```toml
+enforce = ["**", "!vendor/**", "!**/*.generated.rs"]
+```
+
+Then citation stops being optional anywhere, and every line in the repository is
+guaranteed to trace to a decision rather than merely able to. This is what
+traceability standards demand — DO-178C in aerospace, IEC 62304 in medical
+devices — and what six-figure ALM suites exist to provide.
+
+The honest cost is chore pressure. Dependency bumps, formatting passes and
+generated files have no decision behind them, so you end up either growing the
+exemption list forever or minting a routine-maintenance decision that everything
+cites, which is a rubber stamp wearing a lanyard.
+
+</details>
 
 ## 🔧 Concepts
 
