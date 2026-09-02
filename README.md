@@ -1,8 +1,14 @@
-# dogma
+# 🐕 dogma
 
 Decision records linked to the changes they justify, enforced in CI.
 
 > δόγμα — *that which seems good*; the formal word for an assembly's decision.
+
+Written specifications drift from reality, and the discipline that would stop
+them can't be gated in CI without turning every open pull request red.
+
+*Arriving from [OpenSpec](https://github.com/Fission-AI/OpenSpec)? See
+[why dogma diverged](#coming-from-openspec).*
 
 <p align="center">
   <img src="docs/doge.png" width="620"
@@ -11,26 +17,9 @@ Decision records linked to the changes they justify, enforced in CI.
 
 ---
 
-## 🔥 The problem
+<a id="design"></a>
 
-Teams that keep written specifications have no way to stop them drifting from
-reality. Someone changes behaviour, forgets the spec, and the document quietly
-stops describing the system. Everyone knows this happens; nobody can gate it.
-
-The usual attempt is a CI check asserting the specs are up to date. It fails
-immediately, because the property is violated *by design* while work is in
-flight — a branch mid-implementation is supposed to be inconsistent. So the
-check is red on every PR from the first commit to the last, and a pipeline
-that is always red is a pipeline people stop reading.
-
-Existing spec tools attack this with a filing step: a command run at the end of
-a change that merges its spec edits into the living document. That relocates
-the problem rather than solving it. On a team with code review there is no
-correct moment to run it — during review, feedback invalidates it; after merge,
-a bot has to commit to a protected branch; at approval, most forges have no
-such trigger. And if the filing step is skipped, nothing notices.
-
-## ⚖️ The rule
+## ⚖️ Design
 
 Dogma enforces one thing:
 
@@ -55,7 +44,45 @@ decision ──cited by──> commits ──contain──> spec changes
 | what did we agree and never build? | `dogma gaps` |
 | is this branch compliant? | `dogma check main..HEAD` |
 
-## 🔧 How it works
+### Tracing code, optionally
+
+Nothing in the mechanism is spec-specific — `enforce` is a list of globs, and
+the tool has no idea what a spec is. That makes the interesting setting a
+choice rather than a feature:
+
+```toml
+enforce = ["specs/**"]                      # spec-level traceability
+enforce = ["**", "!vendor/**"]              # every line in the repository
+```
+
+Enforce only your specs and you get the modest version: consequential documents
+can't change without a reason. Enforce code as well and something better falls
+out — **every line in the repository traces to a decision**:
+
+```console
+$ dogma why src/session.rs:88
+26-09-02-session-lifetime  (accepted)  Expire idle sessions after 8 hours
+```
+
+At that setting decisions stop being per-change paperwork and become durable
+architectural anchors: one decision, cited by years of commits, answering "why
+is this like this" for everything downstream of it. Because the link is a commit
+trailer rather than an annotation in the code, it survives refactors — git
+already tracks lines across moves and renames.
+
+It is also, incidentally, what traceability standards demand. DO-178C in
+aerospace and IEC 62304 in medical devices both require every change to be
+traceable to an approved change request; teams satisfy that today with six-figure
+ALM suites whose core function is this one edge.
+
+**The honest cost at that setting** is chore pressure. Dependency bumps,
+formatting passes and generated files have no decision behind them, so you end
+up either growing the exemption list or minting a routine-maintenance decision
+that everything cites — a rubber stamp wearing a lanyard. Enforcing the
+genuinely consequential surfaces (specs, schemas, public APIs, migrations,
+infrastructure) is where "changed silently" actually costs you something.
+
+## 🔧 Concepts
 
 ### Decisions
 
@@ -148,7 +175,7 @@ because dogma doesn't own them — `enforce` is just a list of globs.
 The tool has no concept of a "spec". It knows *enforced paths*, and "spec" is
 your word for whatever you chose to enforce.
 
-## 🐕 Commands
+## ⌨️ Commands
 
 ```
 dogma new <title>            create a decision, dated today, status: proposed
@@ -218,18 +245,9 @@ An unknown key is an error rather than a silent no-op, for the reason above.
 `enforce` patterns are evaluated in order and **the last match wins**, the same
 rule `.gitignore` uses, so `!pattern` carves exceptions out of a broader sweep.
 
-Nothing about the mechanism is spec-specific. Point `enforce` at `schema/`,
-`proto/`, or `infra/terraform/` and it behaves identically. Enforcing the whole
-repository is a legitimate configuration:
-
-```toml
-enforce = ["**", "!vendor/**", "!**/*.generated.rs"]
-```
-
-At that setting decisions stop being per-change paperwork and become durable
-architectural anchors — one decision cited by years of commits. It is also what
-traceability standards like DO-178C and IEC 62304 require, which heavyweight ALM
-suites exist to provide.
+Point `enforce` at `schema/`, `proto/`, or `infra/terraform/` and it behaves
+identically — see [Design](#design) for what enforcing the whole repository
+buys you.
 
 **The decisions directory is never enforced**, whatever the config says. A
 repository that enforced its own decisions could not add one: the commit would
@@ -279,6 +297,8 @@ conspicuous when empty.
 
 See [`.dogma/decisions/26/09/02-git-is-the-lifecycle.md`](.dogma/decisions/26/09/02-git-is-the-lifecycle.md)
 for the reasoning, including the alternatives that were rejected.
+
+<a id="coming-from-openspec"></a>
 
 ## 🧭 Coming from OpenSpec
 
