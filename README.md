@@ -16,20 +16,18 @@ them can't be gated in CI without turning every open pull request red.
 
 ## 🚶 Workflow
 
-A service with a spec and no dogma yet. The defaults already enforce `specs/**`,
-so there is nothing to configure:
-
 ```
 my-service/
+├── .dogma/
+│   └── decisions/26/09/02-session-lifetime.md
 ├── specs/
-│   └── auth.md
-├── src/
-│   └── session.rs
-└── Cargo.toml
+│   └── auth.md                                  ← enforced by default
+└── src/
+    └── session.rs
 ```
 
-**1. You need to change behaviour.** Sessions expire too aggressively. Record
-the decision before touching anything:
+**1. Record the decision.** Sessions expire too aggressively, so before touching
+anything:
 
 ```console
 $ dogma new "session lifetime"
@@ -39,16 +37,8 @@ Cite it from the commit that acts on it:
     Decision: 26-09-02-session-lifetime
 ```
 
-```
-my-service/
-├── .dogma/
-│   └── decisions/26/09/02-session-lifetime.md   ← new, status: proposed
-├── specs/auth.md
-└── src/session.rs
-```
-
 **2. Fill it in.** The scaffold's sections are the argument, not paperwork —
-*Alternatives* is where a real decision proves it was one:
+*Alternatives* is where a decision proves it was one:
 
 ```markdown
 ---
@@ -57,23 +47,20 @@ title: session lifetime
 ---
 
 ## Context
-Support sees ~40 tickets a month from users logged out mid-form.
+~40 support tickets a month from users logged out mid-form.
 
 ## Decision
 Idle sessions expire after 8 hours rather than 30 minutes.
 
 ## Alternatives
-Sliding expiry on every request — rejected, it never expires an abandoned
-session on a shared machine. Remember-me checkbox — rejected for now, it moves
-the decision to users who cannot assess it.
+Sliding expiry — never expires an abandoned session on a shared machine.
+Remember-me — moves the decision to users who cannot assess it.
 
 ## Consequences
-A stolen session token is useful for longer. Revisit if we add device
-management, which would give us a better lever than the clock.
+A stolen token is useful for longer. Revisit if we add device management.
 ```
 
-**3. Do the work, and cite it.** Spec and code in one commit, or several — only
-the merged result has to hold together:
+**3. Do the work, and cite it.** Spec and code together:
 
 ```console
 $ git commit -am "Expire idle sessions after 8 hours
@@ -89,19 +76,12 @@ $ dogma check
 exit 1
 ```
 
-**4. Review, then accept.** Reviewers argue with the *decision*, not just the
+**4. Accept it in review.** Reviewers argue with the decision, not just the
 diff. When it lands, one word changes:
 
 ```diff
 -status: proposed
 +status: accepted
-```
-
-```console
-$ dogma check
-✓ decisions well-formed (1)
-✓ enforce patterns match
-✓ 1 enforced change cites an accepted decision
 ```
 
 **5. Six months later**, someone asks why sessions last so long:
@@ -117,6 +97,24 @@ a1b2c3d  Expire idle sessions after 8 hours
 ```
 
 Nobody maintained that link. It is the commit.
+
+### What this does not tell you
+
+Dogma never verifies that a spec is **implemented** — only that changes to it
+carry a recorded reason. Step 3 puts spec and code in one commit by convention,
+and nothing enforces that convention.
+
+Two thirds of an answer are available:
+
+- `dogma gaps` lists accepted decisions no commit implements — the *we agreed
+  and never built it* case, which is usually the one that bites.
+- Whether the code does what the words say is the correspondence problem, and
+  no tool in this space solves it. Point scenario names at test names; a green
+  suite is the only mechanical evidence that exists.
+
+Closing that last gap is the team's to design — a definition of done, a
+review checklist, a scenario-to-test naming convention. Dogma deliberately does
+not guess at which, because the answer depends on how you already work.
 
 <a id="design"></a>
 
