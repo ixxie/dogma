@@ -1,5 +1,6 @@
 mod config;
 mod decision;
+mod paths;
 mod template;
 
 use std::fs;
@@ -18,7 +19,7 @@ use config::Config;
     name = "dogma",
     version,
     about = "Decision records linked to the changes they justify.",
-    long_about = "Enforces one rule: a commit that changes a guarded path must cite an \
+    long_about = "Enforces one rule: a commit that changes an enforced path must cite an \
 accepted decision. Everything it reports is derived from git and the working tree at \
 the moment you ask — it stores no state of its own."
 )]
@@ -38,10 +39,10 @@ enum Command {
     /// List decisions, oldest first
     List,
 
-    /// The gate: guarded changes cite an accepted decision
+    /// The gate: enforced changes cite an accepted decision
     ///
-    /// Also verifies that decisions are well-formed and that every guarded
-    /// glob matches something. Exits 1 on a violation, 2 on a usage error.
+    /// Also verifies that decisions are well-formed and that every `enforce`
+    /// pattern matches something. Exits 1 on a violation, 2 on a usage error.
     Check {
         /// Commit range, e.g. main..HEAD. Defaults to the CI merge base when
         /// one is available, otherwise origin/HEAD..HEAD.
@@ -50,7 +51,7 @@ enum Command {
 
     /// Where the record and reality have come apart
     ///
-    /// Accepted decisions nothing implements, and guarded files with no
+    /// Accepted decisions nothing implements, and enforced files with no
     /// decision behind them. Always exits 0 — this is a report, never a gate.
     Gaps,
 

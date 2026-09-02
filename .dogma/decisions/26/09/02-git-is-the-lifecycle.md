@@ -35,7 +35,7 @@ and the change it justifies is a commit trailer:
 
     Decision: 26-09-02-git-is-the-lifecycle
 
-The tool enforces one rule — a commit touching a guarded path must cite an
+The tool enforces one rule — a commit touching an enforced path must cite an
 accepted decision — and answers questions by traversing that link in git.
 
 ## Alternatives
@@ -63,7 +63,7 @@ changes touching the same requirement produce a merge conflict — surfaced by
 git, resolved by a human, which is correct. Every question is answered from
 commits, so no index can disagree with reality.
 
-Harder: guarded content cannot change without a recorded reason. That is the
+Harder: enforced content cannot change without a recorded reason. That is the
 point, and it is also the whole cost. If writing a decision is heavyweight,
 teams will write hollow ones to pass the gate, so the template must stay short.
 

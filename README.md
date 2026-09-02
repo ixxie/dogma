@@ -29,10 +29,10 @@ such trigger. And if the filing step is skipped, nothing notices.
 
 Dogma enforces one thing:
 
-> **a commit that changes a guarded path must cite an accepted decision.**
+> **a commit that changes an enforced path must cite an accepted decision.**
 
 That's the whole design. It is green during normal work — commits that touch
-nothing guarded are unaffected — and it fails only when someone changes
+nothing enforced are unaffected — and it fails only when someone changes
 something significant without recording why.
 
 From that single edge you get a traceability graph in which every link is a
@@ -133,12 +133,15 @@ Defaults, all configurable:
   decisions/
     26/09/02-git-is-the-lifecycle.md
 specs/
-  auth.md                            guarded — changing this needs a citation
+  auth.md                            enforced — changing this needs a citation
 src/
 ```
 
 Only `.dogma/` belongs to the tool. Specs live wherever your team wants them,
-because dogma doesn't own them — `guarded` is just a glob.
+because dogma doesn't own them — `enforce` is just a list of globs.
+
+The tool has no concept of a "spec". It knows *enforced paths*, and "spec" is
+your word for whatever you chose to enforce.
 
 ## Commands
 
@@ -159,25 +162,25 @@ for its behaviour to be described.
 
 The gate. Verifies three things:
 
-1. every commit in the range touching a guarded path cites a decision
+1. every commit in the range touching an enforced path cites a decision
 2. every cited decision exists and is `accepted`
-3. the decisions directory is well-formed, and every guarded glob matches
-   something — a typo in `guarded` would otherwise disable the gate *while
-   leaving it green*, which is the worst failure a gate can have
+3. the decisions directory is well-formed, and every `enforce` pattern matches
+   something — a typo there would otherwise disable the gate *while leaving it
+   green*, which is the worst failure a gate can have
 
 ```
 $ dogma check main..HEAD
 ✓ decisions well-formed (12)
-✓ guarded globs match
-✓ 3 guarded changes cite accepted decisions
+✓ enforce patterns match
+✓ 3 enforced changes cite accepted decisions
 
-  14 guarded files have no decision behind them   → dogma gaps
+  14 enforced files have no decision behind them  → dogma gaps
    2 accepted decisions are unimplemented         → dogma gaps
 ```
 
 | exit | meaning |
 |---|---|
-| 0 | every guarded change cites an accepted decision |
+| 0 | every enforced change cites an accepted decision |
 | 1 | a violation |
 | 2 | usage or environment error |
 
@@ -190,7 +193,7 @@ intermediate commit did.
 ### `gaps`
 
 Always exits 0. This is a report, never a gate — and that is deliberate. Every
-repo adopting dogma has pre-existing specs with no decision behind them, and
+repo adopting dogma has pre-existing files with no decision behind them, and
 folding those into `check` would recreate the permanent-red problem the tool
 exists to avoid. `check` surfaces the counts and points here; `gaps` does the
 listing.
@@ -201,14 +204,33 @@ Optional. `.dogma/config.toml` or `dogma.toml`:
 
 ```toml
 decisions = ".dogma/decisions"
-guarded   = ["specs/**"]
+enforce   = ["specs/**", "!specs/drafts/**"]
 trailer   = "Decision"
 ```
 
 An unknown key is an error rather than a silent no-op, for the reason above.
 
-Nothing about the mechanism is spec-specific. Point `guarded` at `schema/`,
-`proto/`, or `infra/terraform/` and it behaves identically.
+`enforce` patterns are evaluated in order and **the last match wins**, the same
+rule `.gitignore` uses, so `!pattern` carves exceptions out of a broader sweep.
+
+Nothing about the mechanism is spec-specific. Point `enforce` at `schema/`,
+`proto/`, or `infra/terraform/` and it behaves identically. Enforcing the whole
+repository is a legitimate configuration:
+
+```toml
+enforce = ["**", "!vendor/**", "!**/*.generated.rs"]
+```
+
+At that setting decisions stop being per-change paperwork and become durable
+architectural anchors — one decision cited by years of commits. It is also what
+traceability standards like DO-178C and IEC 62304 require, which heavyweight ALM
+suites exist to provide.
+
+**The decisions directory is never enforced**, whatever the config says. A
+repository that enforced its own decisions could not add one: the commit would
+need to cite an accepted decision, and a new decision is born `proposed`. The
+exclusion is in code rather than left to the user, so the lockout is impossible
+rather than one typo away.
 
 **Not configurable:** the statuses, and which of them satisfies the gate. If
 those varied per repo, `dogma check` would mean something different in each

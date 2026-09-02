@@ -20,7 +20,11 @@ pub struct Config {
     /// Directory holding decision records, relative to the repo root.
     pub decisions: PathBuf,
     /// Path globs whose modification requires citing an accepted decision.
-    pub guarded: Vec<String>,
+    ///
+    /// Evaluated in order, last match wins, so `!pattern` carves exceptions
+    /// out of a broader sweep. The decisions directory is never enforced,
+    /// whatever appears here.
+    pub enforce: Vec<String>,
     /// Commit trailer key used to cite a decision.
     pub trailer: String,
 }
@@ -29,7 +33,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             decisions: PathBuf::from(".dogma/decisions"),
-            guarded: vec!["specs/**".to_string()],
+            enforce: vec!["specs/**".to_string()],
             trailer: "Decision".to_string(),
         }
     }
@@ -78,15 +82,15 @@ mod tests {
 
         let config = Config::load(dir.path()).unwrap();
         assert_eq!(config.trailer, "Because");
-        assert_eq!(config.guarded, vec!["specs/**".to_string()]);
+        assert_eq!(config.enforce, vec!["specs/**".to_string()]);
     }
 
     #[test]
     fn an_unknown_key_is_an_error_rather_than_silently_ignored() {
-        // A typo in `guarded` would otherwise disable the gate while leaving
+        // A typo in `enforce` would otherwise disable the gate while leaving
         // it green, which is the worst failure a gate can have.
         let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("dogma.toml"), "guardd = [\"specs/**\"]\n").unwrap();
+        fs::write(dir.path().join("dogma.toml"), "enfroce = [\"specs/**\"]\n").unwrap();
 
         assert!(Config::load(dir.path()).is_err());
     }
