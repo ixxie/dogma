@@ -14,6 +14,110 @@ them can't be gated in CI without turning every open pull request red.
 
 ---
 
+## 🚶 Workflow
+
+A service with a spec and no dogma yet. The defaults already enforce `specs/**`,
+so there is nothing to configure:
+
+```
+my-service/
+├── specs/
+│   └── auth.md
+├── src/
+│   └── session.rs
+└── Cargo.toml
+```
+
+**1. You need to change behaviour.** Sessions expire too aggressively. Record
+the decision before touching anything:
+
+```console
+$ dogma new "session lifetime"
+.dogma/decisions/26/09/02-session-lifetime.md
+
+Cite it from the commit that acts on it:
+    Decision: 26-09-02-session-lifetime
+```
+
+```
+my-service/
+├── .dogma/
+│   └── decisions/26/09/02-session-lifetime.md   ← new, status: proposed
+├── specs/auth.md
+└── src/session.rs
+```
+
+**2. Fill it in.** The scaffold's sections are the argument, not paperwork —
+*Alternatives* is where a real decision proves it was one:
+
+```markdown
+---
+status: proposed
+title: session lifetime
+---
+
+## Context
+Support sees ~40 tickets a month from users logged out mid-form.
+
+## Decision
+Idle sessions expire after 8 hours rather than 30 minutes.
+
+## Alternatives
+Sliding expiry on every request — rejected, it never expires an abandoned
+session on a shared machine. Remember-me checkbox — rejected for now, it moves
+the decision to users who cannot assess it.
+
+## Consequences
+A stolen session token is useful for longer. Revisit if we add device
+management, which would give us a better lever than the clock.
+```
+
+**3. Do the work, and cite it.** Spec and code in one commit, or several — only
+the merged result has to hold together:
+
+```console
+$ git commit -am "Expire idle sessions after 8 hours
+
+Decision: 26-09-02-session-lifetime"
+```
+
+Forget the trailer and the gate says so:
+
+```console
+$ dogma check
+✗ specs/auth.md changed in a1b2c3d with no decision cited
+exit 1
+```
+
+**4. Review, then accept.** Reviewers argue with the *decision*, not just the
+diff. When it lands, one word changes:
+
+```diff
+-status: proposed
++status: accepted
+```
+
+```console
+$ dogma check
+✓ decisions well-formed (1)
+✓ enforce patterns match
+✓ 1 enforced change cites an accepted decision
+```
+
+**5. Six months later**, someone asks why sessions last so long:
+
+```console
+$ dogma why specs/auth.md:12
+26-09-02-session-lifetime  (accepted)  session lifetime
+
+$ dogma impact 26-09-02-session-lifetime
+a1b2c3d  Expire idle sessions after 8 hours
+         specs/auth.md
+         src/session.rs
+```
+
+Nobody maintained that link. It is the commit.
+
 <a id="design"></a>
 
 ## ⚖️ Design
@@ -132,6 +236,16 @@ The superseded decision is never touched. It stays `accepted`, because it *was* 
 decisions are events, and commits that cited it were correct at the time.
 "Superseded" is derived by following the link backwards.
 
+### Enforced paths
+
+Only `.dogma/` belongs to the tool. Everything it watches lives wherever your
+team already keeps it, because dogma doesn't own those files — `enforce` is
+just a list of globs.
+
+The tool has no concept of a "spec". It knows *enforced paths*, and "spec" is
+your word for whatever you chose to enforce. Point it at `schema/`, `proto/` or
+`infra/terraform/` and nothing about its behaviour changes.
+
 ### The citation
 
 The only mechanical link between a decision and the work it justifies is a
@@ -163,26 +277,6 @@ implements a particular requirement. That needs annotations in code, and
 annotations rot on the first refactor. Commit-level traceability is free and
 durable; requirement-level correspondence is unsolved by every tool in this
 space, and dogma doesn't pretend otherwise.
-
-## 📁 Layout
-
-Defaults, all configurable:
-
-```
-.dogma/
-  config.toml                        optional
-  decisions/
-    26/09/02-git-is-the-lifecycle.md
-specs/
-  auth.md                            enforced — changing this needs a citation
-src/
-```
-
-Only `.dogma/` belongs to the tool. Specs live wherever your team wants them,
-because dogma doesn't own them — `enforce` is just a list of globs.
-
-The tool has no concept of a "spec". It knows *enforced paths*, and "spec" is
-your word for whatever you chose to enforce.
 
 ## ⌨️ Commands
 
@@ -254,9 +348,7 @@ An unknown key is an error rather than a silent no-op, for the reason above.
 `enforce` patterns are evaluated in order and **the last match wins**, the same
 rule `.gitignore` uses, so `!pattern` carves exceptions out of a broader sweep.
 
-Point `enforce` at `schema/`, `proto/`, or `infra/terraform/` and it behaves
-identically — see [Design](#design) for what enforcing the whole repository
-buys you.
+See [Design](#design) for what enforcing the whole repository buys you.
 
 **The decisions directory is never enforced**, whatever the config says. A
 repository that enforced its own decisions could not add one: the commit would
