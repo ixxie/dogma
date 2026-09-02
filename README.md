@@ -34,7 +34,7 @@ them can't be gated in CI without turning every open pull request red.
 | *Does* the code do it? | your tests |
 | **Why is it like this, and who agreed?** | **dogma** |
 
-Dogma answers the third question only. It never parses your specifications, runs
+Dogma answers the third question. It never parses your specifications, runs
 your tests or renders your docs, so it composes with whatever you already use:
 
 ```toml
@@ -43,6 +43,39 @@ enforce = ["openapi.yaml"]    # a schema as the contract
 enforce = ["docs/**"]         # Sphinx, mkdocs, Docusaurus
 enforce = ["specs/**"]        # plain markdown
 ```
+
+### The join across them
+
+Those tools know nothing about each other. Your feature files, your schema, your
+tests and your docs are separate worlds with separate vocabularies, and the only
+thing they share is the repository. Git knows they changed together; it does not
+know why.
+
+A citation makes the *why* addressable, and because every tool's artifacts are
+cited with the same key, one query crosses all of them:
+
+```console
+$ dogma impact 26-09-02-session-lifetime
+a1b2c3d  Expire idle sessions after 8 hours
+         specs/auth.md
+         features/session.feature
+         tests/test_session.py
+         openapi.yaml
+         src/session.rs
+         docs/security.md
+```
+
+Nothing was integrated to produce that. No plugin reads Cucumber, no adapter
+parses OpenAPI. Those files are related because they changed for the same
+recorded reason, and the relationship is a commit rather than an index that
+somebody has to maintain.
+
+Read the other way, `dogma why` takes any line in any of them and returns the
+decision behind it.
+
+Two honest limits: it links what was **cited**, so a test written months later
+without a trailer is not in the set; and it reports paths without knowing which
+is the schema and which is the test, because it never learned what those are.
 
 ## 🚶 Workflow
 
